@@ -1,0 +1,22 @@
+name = "atria-ai-backend"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "atria_db_ai"
+database_id = "80556780-c30c-4c4d-b932-6828ae10984e"
+
+[triggers]
+crons = ["0 3 * * *"]
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "atria-brain"
+
+[[r2_buckets]]
+binding = "BRAIN_FILES"
+bucket_name = "brain-archive"
