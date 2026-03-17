@@ -2175,15 +2175,33 @@
     <div id="form-login" class="modal-form" style="display:none;">
       <div class="form-group">
         <label class="form-label">Email</label>
-        <input type="email" class="form-input" placeholder="seu@email.com"/>
+        <input type="email" class="form-input" id="login-email" placeholder="seu@email.com"/>
       </div>
       <div class="form-group">
         <label class="form-label">Senha</label>
-        <input type="password" class="form-input" placeholder="Sua senha"/>
+        <input type="password" class="form-input" id="login-senha" placeholder="Sua senha"/>
       </div>
-      <button class="btn-submit">Entrar →</button>
+      <button class="btn-submit" id="btn-login-submit">Entrar →</button>
       <div class="modal-switch">
-        <a href="#">Esqueci minha senha</a>
+        <a href="#" onclick="abrirEsqueciSenha();return false;">Esqueci minha senha</a>
+      </div>
+    </div>
+
+    <!-- Esqueci minha senha -->
+    <div id="form-esqueci" class="modal-form" style="display:none;">
+      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:4px;line-height:1.6;">
+        Digite seu email e enviaremos um link para redefinir sua senha.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" id="esqueci-email" placeholder="seu@email.com"/>
+      </div>
+      <button class="btn-submit" id="btn-esqueci-submit">Enviar link →</button>
+      <div id="esqueci-sucesso" style="display:none;text-align:center;padding:12px;background:rgba(0,212,212,0.08);border:1px solid rgba(0,212,212,0.2);border-radius:10px;font-size:13px;color:var(--cyan);">
+        ✅ Email enviado! Verifique sua caixa de entrada (e o spam).
+      </div>
+      <div class="modal-switch">
+        <a href="#" onclick="voltarParaLogin();return false;">← Voltar para o login</a>
       </div>
     </div>
 
@@ -2378,14 +2396,11 @@
   });
 
   // ── Login ──────────────────────────────────────────────────────────
-  document.querySelector("#form-login .btn-submit").addEventListener("click", async function() {
+  document.getElementById("btn-login-submit").addEventListener("click", async function() {
     limparErro("login");
-    const inputs = document.querySelectorAll("#form-login .form-input");
-    const email = inputs[0].value.trim();
-    const senha = inputs[1].value;
-
+    const email = document.getElementById("login-email").value.trim();
+    const senha = document.getElementById("login-senha").value;
     if (!email || !senha) { mostrarErro("login", "Preencha email e senha."); return; }
-
     setBtnLoading(this, true, "Entrar →");
     try {
       const res = await fetch(API + "/login", {
@@ -2401,6 +2416,38 @@
     } finally {
       setBtnLoading(this, false, "Entrar →");
     }
+  });
+
+  // ── Esqueci minha senha ───────────────────────────────────────────
+  function abrirEsqueciSenha() {
+    document.getElementById("form-login").style.display   = "none";
+    document.getElementById("form-esqueci").style.display = "flex";
+    document.getElementById("esqueci-sucesso").style.display = "none";
+    document.getElementById("btn-esqueci-submit").style.display = "block";
+    document.getElementById("esqueci-email").value = document.getElementById("login-email").value || "";
+    setTimeout(() => document.getElementById("esqueci-email").focus(), 100);
+  }
+
+  function voltarParaLogin() {
+    document.getElementById("form-esqueci").style.display = "none";
+    document.getElementById("form-login").style.display   = "flex";
+  }
+
+  document.getElementById("btn-esqueci-submit").addEventListener("click", async function() {
+    const email = document.getElementById("esqueci-email").value.trim();
+    if (!email) return;
+    setBtnLoading(this, true, "Enviar link →");
+    try {
+      await fetch(API + "/esqueci-senha", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch(e) {}
+    // Sempre mostra sucesso — não revela se o email existe
+    document.getElementById("btn-esqueci-submit").style.display = "none";
+    document.getElementById("esqueci-sucesso").style.display    = "block";
+    setBtnLoading(this, false, "Enviar link →");
   });
 
   // ── Verifica se já está logado ─────────────────────────────────────

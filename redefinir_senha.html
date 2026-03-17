@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Redefinir senha — Atria AI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f; --surface: #111118; --border: rgba(255,255,255,0.07);
+    --cyan: #00d4d4; --purple: #9b7fff; --text: #f0f0f5; --muted: #6b6b80;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 15px;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 40px 36px; width: 100%; max-width: 420px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 28px;
+    text-decoration: none;
+  }
+  .logo-mark {
+    width: 36px; height: 36px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px; color: #000;
+  }
+  .logo-text { font-size: 20px; color: var(--text); }
+  .logo-text span { color: var(--cyan); }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 8px; }
+  .sub { font-size: 14px; color: var(--muted); margin-bottom: 28px; line-height: 1.6; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  input[type="password"] {
+    width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none;
+    transition: border-color 0.2s; margin-bottom: 16px;
+  }
+  input[type="password"]:focus { border-color: var(--cyan); }
+  .btn {
+    width: 100%; padding: 13px; border-radius: 10px; border: none;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    color: #000; font-weight: 600; font-size: 15px;
+    font-family: 'DM Sans', sans-serif; cursor: pointer;
+    transition: opacity 0.2s; margin-top: 4px;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .msg {
+    margin-top: 16px; padding: 12px 14px; border-radius: 10px;
+    font-size: 13px; line-height: 1.5; display: none;
+  }
+  .msg.ok   { background: rgba(0,212,212,0.08); border: 1px solid rgba(0,212,212,0.2); color: var(--cyan); }
+  .msg.erro { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #f87171; }
+  .voltar { display: block; text-align: center; margin-top: 20px; font-size: 13px; color: var(--muted); text-decoration: none; }
+  .voltar:hover { color: var(--cyan); }
+</style>
+</head>
+<body>
+<div class="card">
+  <a class="logo" href="/index.html">
+    <div class="logo-mark">A</div>
+    <div class="logo-text">Atria <span>AI</span></div>
+  </a>
+
+  <div id="tela-form">
+    <h1>Nova senha</h1>
+    <p class="sub">Escolha uma senha com pelo menos 8 caracteres.</p>
+    <div>
+      <label>Nova senha</label>
+      <input type="password" id="senha1" placeholder="Mínimo 8 caracteres"/>
+    </div>
+    <div>
+      <label>Confirmar senha</label>
+      <input type="password" id="senha2" placeholder="Repita a senha"/>
+    </div>
+    <button class="btn" id="btn-salvar" onclick="salvar()">Salvar nova senha →</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div id="tela-sucesso" style="display:none;text-align:center;">
+    <div style="font-size:48px;margin-bottom:16px;">✅</div>
+    <h1 style="margin-bottom:8px;">Senha redefinida!</h1>
+    <p class="sub">Sua senha foi atualizada com sucesso. Faça login com a nova senha.</p>
+    <a href="/index.html" class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:8px;">
+      Ir para o login →
+    </a>
+  </div>
+
+  <div id="tela-invalido" style="display:none;text-align:center;">
+    <div style="font-size:48px;margin-bottom:16px;">⏱️</div>
+    <h1 style="margin-bottom:8px;">Link expirado</h1>
+    <p class="sub">Este link de redefinição já foi usado ou expirou. Solicite um novo na tela de login.</p>
+    <a href="/index.html" class="btn" style="display:block;text-align:center;text-decoration:none;margin-top:8px;">
+      Voltar ao login →
+    </a>
+  </div>
+</div>
+
+<script>
+  const API   = "https://atria-ai-backend.jonhyelson.workers.dev";
+  const token = new URLSearchParams(window.location.search).get("token");
+
+  // Sem token na URL → redireciona
+  if (!token) window.location.href = "/index.html";
+
+  async function salvar() {
+    const btn    = document.getElementById("btn-salvar");
+    const msg    = document.getElementById("msg");
+    const senha1 = document.getElementById("senha1").value;
+    const senha2 = document.getElementById("senha2").value;
+
+    msg.style.display = "none";
+
+    if (senha1.length < 8) {
+      msg.className = "msg erro"; msg.textContent = "A senha deve ter no mínimo 8 caracteres.";
+      msg.style.display = "block"; return;
+    }
+    if (senha1 !== senha2) {
+      msg.className = "msg erro"; msg.textContent = "As senhas não coincidem.";
+      msg.style.display = "block"; return;
+    }
+
+    btn.disabled = true; btn.textContent = "Salvando...";
+    try {
+      const res  = await fetch(API + "/redefinir-senha", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, senha: senha1 }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        document.getElementById("tela-form").style.display    = "none";
+        document.getElementById("tela-sucesso").style.display = "block";
+      } else {
+        // Token inválido ou expirado
+        document.getElementById("tela-form").style.display    = "none";
+        document.getElementById("tela-invalido").style.display = "block";
+      }
+    } catch(e) {
+      msg.className = "msg erro"; msg.textContent = "Erro de conexão. Tente novamente.";
+      msg.style.display = "block";
+      btn.disabled = false; btn.textContent = "Salvar nova senha →";
+    }
+  }
+
+  // Enter para salvar
+  document.addEventListener("keydown", e => { if (e.key === "Enter") salvar(); });
+</script>
+</body>
+</html>

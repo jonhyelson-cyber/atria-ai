@@ -34,6 +34,52 @@ async function hashSenha(senha) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function enviarEmailRecuperacao(email, nome, token, env) {
+  const link = `https://atria-ai-backend.jonhyelson.workers.dev/redefinir-senha?token=${token}`;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Atria AI <noreply@atria-ai.com.br>",
+      to: [email],
+      subject: "Redefinição de senha — Atria AI",
+      html: `
+        <div style="font-family:'DM Sans',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px;background:#0a0a0f;color:#f0f0f5;border-radius:16px;">
+          <div style="text-align:center;margin-bottom:32px;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#00d4d4,#9b7fff);border-radius:10px;padding:10px 18px;font-size:20px;font-weight:700;color:#000;">
+              Atria AI
+            </div>
+          </div>
+          <h2 style="font-size:22px;margin-bottom:8px;color:#f0f0f5;">Olá, ${nome} 👋</h2>
+          <p style="color:#a0a0b0;margin-bottom:24px;line-height:1.6;">
+            Recebemos uma solicitação para redefinir a senha da sua conta. Clique no botão abaixo para criar uma nova senha.
+          </p>
+          <div style="text-align:center;margin:32px 0;">
+            <a href="${link}" style="display:inline-block;background:linear-gradient(135deg,#00d4d4,#9b7fff);color:#000;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;text-decoration:none;">
+              Redefinir minha senha →
+            </a>
+          </div>
+          <p style="color:#6b6b80;font-size:13px;margin-top:24px;line-height:1.6;">
+            Este link expira em <strong style="color:#a0a0b0;">1 hora</strong>. Se você não solicitou a redefinição, ignore este email — sua senha permanece a mesma.
+          </p>
+          <hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:28px 0;"/>
+          <p style="color:#6b6b80;font-size:12px;text-align:center;">
+            Atria AI · Manaus, Amazonas · 🌿 3% da receita vai para a Amazônia
+          </p>
+        </div>
+      `,
+    }),
+  });
+  if (!res.ok) {
+    const erro = await res.text();
+    throw new Error(`Resend erro ${res.status}: ${erro}`);
+  }
+  return true;
+}
+
 function gerarToken() {
   const arr = new Uint8Array(32);
   crypto.getRandomValues(arr);
@@ -373,6 +419,73 @@ async function handleRequest(request, env, ctx) {
       return json({ ok: true, token, usuario: { nome: usuario.nome, email: usuario.email, plano: usuario.plano } });
     } catch (e) {
       return err("Erro interno: " + e.message, 500);
+    }
+  }
+
+  // ── POST /esqueci-senha ───────────────────────────────────────────
+  if (path === "/esqueci-senha" && request.method === "POST") {
+    try {
+      const { email } = await request.json();
+      if (!email) return err("Email é obrigatório.");
+      const usuario = await env.DB.prepare(
+        "SELECT id, nome FROM usuarios WHERE email = ? AND ativo = 1"
+      ).bind(email.toLowerCase().trim()).first();
+
+      // Sempre retorna sucesso — não revela se o email existe (segurança)
+      if (!usuario) return json({ ok: true });
+
+      const token  = gerarToken();
+      const expira = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS reset_tokens (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          usuario_id INTEGER NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          expira_em TEXT NOT NULL,
+          usado INTEGER DEFAULT 0,
+          criado_em TEXT DEFAULT (datetime('now'))
+        )
+      `).run();
+
+      await env.DB.prepare("DELETE FROM reset_tokens WHERE usuario_id = ?").bind(usuario.id).run();
+      await env.DB.prepare(
+        "INSERT INTO reset_tokens (usuario_id, token, expira_em) VALUES (?, ?, ?)"
+      ).bind(usuario.id, token, expira).run();
+
+      await enviarEmailRecuperacao(email, usuario.nome, token, env);
+      return json({ ok: true });
+    } catch (e) {
+      console.error("[esqueci-senha]", e.message);
+      return json({ ok: true });
+    }
+  }
+
+  // ── POST /redefinir-senha ─────────────────────────────────────────
+  if (path === "/redefinir-senha" && request.method === "POST") {
+    try {
+      const { token, senha } = await request.json();
+      if (!token || !senha) return err("Token e nova senha são obrigatórios.");
+      if (senha.length < 8) return err("Senha deve ter no mínimo 8 caracteres.");
+
+      const agora = new Date().toISOString();
+      const registro = await env.DB.prepare(
+        "SELECT usuario_id FROM reset_tokens WHERE token = ? AND expira_em > ? AND usado = 0"
+      ).bind(token, agora).first();
+
+      if (!registro) return err("Link inválido ou expirado. Solicite um novo.", 400);
+
+      const novoHash = await hashSenha(senha);
+      await env.DB.prepare("UPDATE usuarios SET senha_hash = ? WHERE id = ?")
+        .bind(novoHash, registro.usuario_id).run();
+      await env.DB.prepare("UPDATE reset_tokens SET usado = 1 WHERE token = ?")
+        .bind(token).run();
+      await env.DB.prepare("DELETE FROM sessoes WHERE usuario_id = ?")
+        .bind(registro.usuario_id).run();
+
+      return json({ ok: true, mensagem: "Senha redefinida com sucesso!" });
+    } catch (e) {
+      return err("Erro ao redefinir senha: " + e.message, 500);
     }
   }
 
