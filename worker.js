@@ -43,7 +43,7 @@ async function enviarEmailRecuperacao(email, nome, token, env) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "Atria AI <noreply@atria-ai.com.br>",
+      from: "Atria AI <noreply@ai.atriapay.com.br>",
       to: [email],
       subject: "Redefinição de senha — Atria AI",
       html: `
