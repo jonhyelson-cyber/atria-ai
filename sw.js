@@ -1,4 +1,4 @@
-const CACHE_NAME = "atria-ai-v1";
+const CACHE_NAME = "atria-ai-v2";
 const CACHE_STATIC = [
   "/",
   "/index.html",
